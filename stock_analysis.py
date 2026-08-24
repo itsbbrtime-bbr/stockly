@@ -43,11 +43,12 @@ import re
 
 try:
     rc("font", family="AppleGothic")
+    
 except Exception:
     pass
-
+    
 matplotlib.rcParams["axes.unicode_minus"] = False
-
+plt.rcParams["font.family"] = "Noto Sans CJK KR"
 
 # ==============================================================================================
 # 3. CONFIGURATION
