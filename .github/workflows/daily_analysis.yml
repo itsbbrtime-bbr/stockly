@@ -1,0 +1,70 @@
+name: Daily Investment Analysis
+
+on:
+  workflow_dispatch:
+
+  schedule:
+    # 미국장 마감 후 실행.
+    # UTC 21:00은 서머타임 기준 ET 17:00 / KST 다음날 06:00.
+    # 겨울시간에는 ET 16:00에 해당하므로 Python에서 실제 거래일 데이터를 다시 확인.
+    # 월~금 미국 시장 거래일 기준 → 한국시간 화~토 아침에 결과 수신.
+    - cron: "0 21 * * 1-5"
+
+permissions:
+  contents: read
+
+jobs:
+  analysis:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Korean fonts
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y fonts-noto-cjk
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Run quantitative analysis
+        env:
+          TICKER: SOXX
+          BENCHMARK: VOO
+          SAVE_CHARTS: "true"
+        run: |
+          python stock_analysis.py > analysis_result.txt 2>&1
+          cat analysis_result.txt
+
+      - name: Read analysis metadata
+        id: metadata
+        shell: bash
+        run: |
+          source analysis_metadata.env
+          echo "date=$ANALYSIS_DATE" >> "$GITHUB_OUTPUT"
+          echo "signal=$FINAL_SIGNAL" >> "$GITHUB_OUTPUT"
+          echo "ticker=$TICKER" >> "$GITHUB_OUTPUT"
+
+      - name: Send email
+        uses: dawidd6/action-send-mail@v6
+        with:
+          server_address: smtp.gmail.com
+          server_port: 465
+          secure: true
+          username: ${{ secrets.MAIL_USERNAME }}
+          password: ${{ secrets.MAIL_PASSWORD }}
+          subject: "[Daily Stock] ${{ steps.metadata.outputs.ticker }} | ${{ steps.metadata.outputs.date }} | ${{ steps.metadata.outputs.signal }}"
+          to: ${{ secrets.MAIL_USERNAME }}
+          from: ${{ secrets.MAIL_USERNAME }}
+          body: file://analysis_result.txt
+          attachments: charts/*.png
