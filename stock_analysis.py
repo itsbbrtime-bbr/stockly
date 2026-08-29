@@ -3088,6 +3088,6 @@ print("   -> Final Decision")
 # 36. GITHUB ACTIONS METADATA
 # ==============================================================================================
 with open("analysis_metadata.env", "w", encoding="utf-8") as f:
-    f.write(f"ANALYSIS_DATE={TODAY}\n")
-    f.write(f"FINAL_SIGNAL={final_decision['signal']}\n")
-    f.write(f"TICKER={ticker_symbol}\n")
+    f.write(f'ANALYSIS_DATE="{TODAY}"\n')
+    f.write(f'FINAL_SIGNAL="{final_decision["signal"]}"\n')
+    f.write(f'TICKER="{ticker_symbol}"\n')
