@@ -189,9 +189,9 @@ def fmt_pct(x, decimals=2):
 
 
 def print_section(title):
-    print("\n" + "=" * 120)
+    print("\n" + "=" * 35)
     print(title)
-    print("=" * 120)
+    print("=" * 35)
 
 
 def save_or_close_chart(filename):
