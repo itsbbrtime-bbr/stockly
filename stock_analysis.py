@@ -47,7 +47,12 @@ except Exception:
     pass
 matplotlib.rcParams["axes.unicode_minus"] = False
 
+SAVE_CHARTS = os.getenv("SAVE_CHARTS", "false").lower() == "true"
 
+CHART_DIR = "charts"
+
+if SAVE_CHARTS:
+    os.makedirs(CHART_DIR, exist_ok=True)
 # ==============================================================================================
 # 3. CONFIGURATION
 # ==============================================================================================
@@ -222,7 +227,20 @@ def is_etf(symbol, info=None):
 
     return False
 
+def save_chart(filename):
+    """
+    GitHub Actions에서 사용할 차트를 PNG로 저장.
+    SAVE_CHARTS=False이면 저장하지 않음.
+    """
+    if SAVE_CHARTS:
+        filepath = os.path.join(CHART_DIR, filename)
+        plt.savefig(
+            filepath,
+            dpi=150,
+            bbox_inches="tight"
+        )
 
+    plt.close()
 # ==============================================================================================
 # 5. DATA DOWNLOAD
 # ==============================================================================================
@@ -4060,7 +4078,7 @@ plt.grid(alpha=0.3)
 plt.tight_layout()
 
 plt.close()
-
+save_chart("price.png")
 
 # ==============================================================================================
 # 27. CHART 2 - RSI
@@ -4083,7 +4101,7 @@ plt.grid(alpha=0.3)
 plt.tight_layout()
 
 plt.close()
-
+save_chart("rsi.png")
 
 # ==============================================================================================
 # 28. CHART 3 - MACD
@@ -4126,7 +4144,7 @@ plt.grid(alpha=0.3)
 plt.tight_layout()
 
 plt.close()
-
+save_chart("macd.png")
 
 # ==============================================================================================
 # 29. CHART 4 - RELATIVE STRENGTH
@@ -4165,7 +4183,7 @@ plt.grid(alpha=0.3)
 plt.tight_layout()
 
 plt.close()
-
+save_chart("relative_strength.png")
 
 # ==============================================================================================
 # 30. CHART 5 - VOLUME RATIO
@@ -4193,7 +4211,7 @@ plt.grid(alpha=0.3)
 plt.tight_layout()
 
 plt.close()
-
+save_chart("volume_ratio.png")
 
 # ==============================================================================================
 # 31. CHART 6 - ATR %
@@ -4207,6 +4225,7 @@ plt.legend()
 plt.grid(alpha=0.3)
 plt.tight_layout()
 plt.close()
+save_chart("atr.png")
 
 # ==============================================================================================
 # 32. CHART 7 - FEAR & GREED
@@ -4223,6 +4242,7 @@ if fng_df is not None and not fng_df.empty:
     plt.grid(alpha=0.3)
     plt.tight_layout()
     plt.close()
+    save_chart("fearandgreedindex.png")
 # ==============================================================================================
 # 33. CHART 8 - USD/KRW
 # ==============================================================================================
@@ -4234,6 +4254,7 @@ plt.legend()
 plt.grid(alpha=0.3)
 plt.tight_layout()
 plt.close()
+save_chart("usdkrw.png")
 
 # ==============================================================================================
 # 34. CHART 9 - DXY
@@ -4246,6 +4267,7 @@ plt.legend()
 plt.grid(alpha=0.3)
 plt.tight_layout()
 plt.close()
+save_chart("dxy.png")
 
 # ==============================================================================================
 # 35. FINAL SUMMARY
