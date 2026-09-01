@@ -83,7 +83,7 @@ RS_BENCHMARK = MARKET_BENCHMARK
 
 # 기술적 분석 기간
 # MA200을 안정적으로 계산하고 장기 추세/성과를 보기 위해 3년 사용
-ANALYSIS_YEARS = 3
+ANALYSIS_YEARS = 1
 
 START_DATE = TODAY - timedelta(days=365 * ANALYSIS_YEARS)
 SAVE_CHARTS = os.getenv("SAVE_CHARTS", "true").lower() == "true"
