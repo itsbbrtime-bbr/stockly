@@ -14,7 +14,7 @@
 # 9. Fear & Greed는 매수/매도 버튼이 아닌 시장 심리 보조지표로 사용한다.
 # 10. 가격 성과와 전략 성과를 혼동하지 않는다.
 ################################################################################################
-
+# aier djhi qher azyh
 
 # ==============================================================================================
 # 1. IMPORT
@@ -42,13 +42,11 @@ import re
 # ==============================================================================================
 
 try:
-    rc("font", family="AppleGothic")
-    
+    rc("font", family="DejaVu Sans")
 except Exception:
     pass
-    
 matplotlib.rcParams["axes.unicode_minus"] = False
-plt.rcParams["font.family"] = "Noto Sans CJK KR"
+
 
 # ==============================================================================================
 # 3. CONFIGURATION
@@ -56,13 +54,14 @@ plt.rcParams["font.family"] = "Noto Sans CJK KR"
 
 NY_TZ = ZoneInfo("America/New_York")
 TODAY = datetime.now(NY_TZ).date()
+# TODAY = date(2026, 8, 17)  # backtest
 
-# GitHub Actions 환경변수 우선, 로컬 실행 시 기본값 사용
-ticker_symbol = os.getenv("TICKER", "SOXX")
+# 분석할 종목
+# ticker_symbol = "QQQ" 
 # ticker_symbol = "QLD"
 # ticker_symbol = "TQQQ"  
 # ticker_symbol = "SMH"
-# ticker_symbol = "SOXX"
+ticker_symbol = os.getenv("TICKER", "SOXX")
 # ticker_symbol = "SOXQ"
 # ticker_symbol = "DRAM"
 
@@ -90,7 +89,8 @@ ANALYSIS_YEARS = 3
 START_DATE = TODAY - timedelta(days=365 * ANALYSIS_YEARS)
 SAVE_CHARTS = os.getenv("SAVE_CHARTS", "true").lower() == "true"
 CHART_DIR = os.getenv("CHART_DIR", "charts")
-os.makedirs(CHART_DIR, exist_ok=True) if SAVE_CHARTS else None
+if SAVE_CHARTS:
+    os.makedirs(CHART_DIR, exist_ok=True)
 
 # 환율
 FX_TICKER = "USDKRW=X"
@@ -189,15 +189,14 @@ def fmt_pct(x, decimals=2):
 
 
 def print_section(title):
-    print("\n" + "=" * 33)
+    print("\n" + "=" * 120)
     print(title)
-    print("=" * 33)
+    print("=" * 120)
 
 
 def save_or_close_chart(filename):
-    """GitHub Actions에서는 PNG로 저장하고 로컬에서도 화면을 띄우지 않는다."""
     if SAVE_CHARTS:
-        plt.savefig(os.path.join(CHART_DIR, filename), dpi=150, bbox_inches="tight")
+        plt.savefig(os.path.join(CHART_DIR, os.path.join(CHART_DIR, filename), dpi=150, bbox_inches="tight"), dpi=150, bbox_inches="tight")
     plt.close()
 
 
@@ -247,11 +246,6 @@ def download_price_data(symbol, start_date, end_date):
     # MultiIndex 대응
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
-
-    required = {"Open", "High", "Low", "Close", "Volume"}
-    missing = required - set(df.columns)
-    if missing:
-        raise ValueError(f"{symbol} 필수 가격 데이터 누락: {sorted(missing)}")
 
     df = df.copy()
 
@@ -434,18 +428,9 @@ def calculate_fundamentals(symbol):
     # INDIVIDUAL STOCK
     # ------------------------------------------------------------------------------------------
 
-    try:
-        financials = ticker.financials
-    except Exception:
-        financials = pd.DataFrame()
-    try:
-        balance_sheet = ticker.balance_sheet
-    except Exception:
-        balance_sheet = pd.DataFrame()
-    try:
-        cashflow = ticker.cashflow
-    except Exception:
-        cashflow = pd.DataFrame()
+    financials = ticker.financials
+    balance_sheet = ticker.balance_sheet
+    cashflow = ticker.cashflow
 
     result["analysis_type"] = "STOCK"
 
@@ -1919,89 +1904,1240 @@ def calculate_technical_score(
 # ==============================================================================================
 # 12B. LONG-TERM INVESTING DECISION ENGINE
 # ==============================================================================================
+#
+# 투자철학
+# 1. ETF 장기투자를 기본으로 한다.
+# 2. 상승추세가 유지되는 동안 불필요한 매도를 하지 않는다.
+# 3. 큰 조정이 발생하면 Accumulation을 확인한다.
+# 4. 단순히 많이 떨어졌다는 이유만으로 "저점"이라고 판단하지 않는다.
+# 5. 하락 압력이 약해지고 바닥이 형성되는지를 Bottoming Score로 별도 판단한다.
+# 6. Trend / Accumulation / Bottoming / Risk를 분리한다.
+# ==============================================================================================
+
+
+# ==============================================================================================
+# 12B-1. ASSET TREND SCORE
+# ==============================================================================================
 
 def calculate_trend_score(df, market_regime):
+
     last = df.iloc[-1]
-    close = safe_float(last.get("Close")); ma200 = safe_float(last.get("MA200")); ma50 = safe_float(last.get("MA50")); slope = safe_float(last.get("MA200_Slope")); rs = safe_float(last.get("Relative_Strength")); rs_ma = safe_float(last.get("RS_MA20"))
-    score, reasons = 0, []
-    if close is not None and ma200 is not None and close > ma200: score += 1; reasons.append("가격이 MA200 위")
-    if ma50 is not None and ma200 is not None and ma50 > ma200: score += 1; reasons.append("MA50 > MA200")
-    if slope is not None and slope > 0: score += 1; reasons.append("MA200 상승")
-    if rs is not None and rs_ma is not None and rs > rs_ma: score += 1; reasons.append("시장 대비 상대강도 우위")
-    status = "STRONG" if score == 4 else "HEALTHY" if score == 3 else "NEUTRAL" if score == 2 else "WEAK"
-    return {"score":score,"status":status,"reasons":reasons}
+
+    score = 0
+    max_score = 4
+    reasons = []
+
+    close = safe_float(last.get("Close"))
+    ma50 = safe_float(last.get("MA50"))
+    ma200 = safe_float(last.get("MA200"))
+    ma200_slope = safe_float(last.get("MA200_Slope"))
+
+    rs = safe_float(last.get("Relative_Strength"))
+    rs_ma20 = safe_float(last.get("RS_MA20"))
+
+    # ------------------------------------------------------------------
+    # 1. 가격 > MA200
+    # ------------------------------------------------------------------
+
+    if close is not None and ma200 is not None:
+
+        if close > ma200:
+
+            score += 1
+            reasons.append("가격이 MA200 위")
+
+        else:
+
+            reasons.append("가격이 MA200 아래")
+
+    # ------------------------------------------------------------------
+    # 2. MA50 > MA200
+    # ------------------------------------------------------------------
+
+    if ma50 is not None and ma200 is not None:
+
+        if ma50 > ma200:
+
+            score += 1
+            reasons.append("MA50 > MA200")
+
+        else:
+
+            reasons.append("MA50 < MA200")
+
+    # ------------------------------------------------------------------
+    # 3. MA200 상승
+    # ------------------------------------------------------------------
+
+    if ma200_slope is not None:
+
+        if ma200_slope > 0:
+
+            score += 1
+            reasons.append("MA200 상승")
+
+        else:
+
+            reasons.append("MA200 하락")
+
+    # ------------------------------------------------------------------
+    # 4. 상대강도
+    # ------------------------------------------------------------------
+
+    if rs is not None and rs_ma20 is not None:
+
+        if rs > rs_ma20:
+
+            score += 1
+            reasons.append("시장 대비 상대강도 우위")
+
+        else:
+
+            reasons.append("시장 대비 상대강도 약화")
+
+    # ------------------------------------------------------------------
+    # Status
+    # ------------------------------------------------------------------
+
+    if score == 4:
+
+        status = "STRONG"
+
+    elif score == 3:
+
+        status = "HEALTHY"
+
+    elif score == 2:
+
+        status = "NEUTRAL"
+
+    elif score == 1:
+
+        status = "WEAK"
+
+    else:
+
+        status = "BROKEN"
+
+    return {
+
+        "score": score,
+
+        "max_score": max_score,
+
+        "status": status,
+
+        "reasons": reasons
+
+    }
+
+
+# ==============================================================================================
+# 12B-2. CURRENT DRAWDOWN
+# ==============================================================================================
 
 def calculate_current_drawdown(df):
-    close=df["Close"].dropna(); peak=close.cummax().iloc[-1] if len(close) else None
-    return None if peak in (None,0) else safe_float(close.iloc[-1]/peak-1)
+
+    close = df["Close"].dropna()
+
+    if close.empty:
+
+        return None
+
+    peak = close.cummax().iloc[-1]
+
+    if peak is None or peak == 0:
+
+        return None
+
+    return safe_float(
+        close.iloc[-1] / peak - 1
+    )
+
+
+# ==============================================================================================
+# 12B-3. ACCUMULATION SCORE
+# ==============================================================================================
+#
+# 의미:
+# "현재 가격이 장기투자자 입장에서 얼마나 매력적인 조정 구간인가?"
+#
+# 중요:
+# Accumulation은 "바닥이 형성되었는가"를 판단하지 않는다.
+# 단순히 많이 떨어졌다는 이유로 무한정 점수가 증가하지 않도록 제한한다.
+#
+# 총점 : 8점
+#
+# 1. Drawdown          0~3
+# 2. Fear & Greed      0~2
+# 3. RSI                0~1
+# 4. MA200 Discount     0~2
+#
+# ==============================================================================================
 
 def calculate_accumulation_score(df, fng_value):
-    last=df.iloc[-1]; score=0; reasons=[]; dd=calculate_current_drawdown(df)
-    rsi=safe_float(last.get("RSI")); bb=safe_float(last.get("BB_PctB")); close=safe_float(last.get("Close")); ma200=safe_float(last.get("MA200"))
-    dist=None if close is None or ma200 in (None,0) else close/ma200-1
+
+    last = df.iloc[-1]
+
+    score = 0
+    max_score = 8
+
+    reasons = []
+
+    dd = calculate_current_drawdown(df)
+
+    rsi = safe_float(
+        last.get("RSI")
+    )
+
+    bb = safe_float(
+        last.get("BB_PctB")
+    )
+
+    close = safe_float(
+        last.get("Close")
+    )
+
+    ma200 = safe_float(
+        last.get("MA200")
+    )
+
+    ma200_distance = None
+
+    if (
+        close is not None
+        and ma200 is not None
+        and ma200 != 0
+    ):
+
+        ma200_distance = (
+            close / ma200
+            - 1
+        )
+
+    # ------------------------------------------------------------------
+    # 1. Drawdown
+    #
+    # -5%   : 0
+    # -10%  : 1
+    # -15%  : 2
+    # -20%+ : 3
+    #
+    # -30% 이상이라고 추가 점수를 주지 않는다.
+    # 이유:
+    # "더 많이 떨어졌다 = 더 좋은 매수"
+    # 라는 잘못된 논리를 방지.
+    # ------------------------------------------------------------------
+
     if dd is not None:
-        if dd <= -0.30: score+=5; reasons.append("고점 대비 -30% 이상 조정")
-        elif dd <= -0.20: score+=4; reasons.append("고점 대비 -20% 이상 조정")
-        elif dd <= -0.15: score+=3; reasons.append("고점 대비 -15% 이상 조정")
-        elif dd <= -0.10: score+=2; reasons.append("고점 대비 -10% 이상 조정")
-        elif dd <= -0.05: score+=1; reasons.append("고점 대비 -5% 이상 조정")
+
+        if dd <= -0.20:
+
+            score += 3
+            reasons.append(
+                "고점 대비 -20% 이상 조정"
+            )
+
+        elif dd <= -0.15:
+
+            score += 2
+            reasons.append(
+                "고점 대비 -15% 이상 조정"
+            )
+
+        elif dd <= -0.10:
+
+            score += 1
+            reasons.append(
+                "고점 대비 -10% 이상 조정"
+            )
+
+        elif dd <= -0.05:
+
+            reasons.append(
+                "고점 대비 -5% 이상 조정"
+            )
+
+    # ------------------------------------------------------------------
+    # 2. Fear & Greed
+    # ------------------------------------------------------------------
+
     if fng_value is not None:
-        if fng_value < 15: score+=4; reasons.append("Fear & Greed 극단적 공포")
-        elif fng_value < 25: score+=3; reasons.append("Fear & Greed 강한 공포")
-        elif fng_value < 35: score+=2; reasons.append("Fear & Greed 공포")
-        elif fng_value < 45: score+=1; reasons.append("Fear & Greed 약한 공포")
-        elif fng_value >= 75: score-=2; reasons.append("Fear & Greed 극단적 탐욕 - 신규 매수 축소")
-        elif fng_value >= 60: score-=1; reasons.append("Fear & Greed 탐욕 - 신규 매수 속도 조절")
+
+        fng_value = safe_float(fng_value)
+
+        if fng_value < 25:
+
+            score += 2
+            reasons.append(
+                "Fear & Greed 강한 공포"
+            )
+
+        elif fng_value < 40:
+
+            score += 1
+            reasons.append(
+                "Fear & Greed 공포"
+            )
+
+        elif fng_value >= 75:
+
+            reasons.append(
+                "Fear & Greed 극단적 탐욕 - 신규 매수 속도 조절"
+            )
+
+        elif fng_value >= 60:
+
+            reasons.append(
+                "Fear & Greed 탐욕 - 신규 매수 속도 조절"
+            )
+
+    # ------------------------------------------------------------------
+    # 3. RSI
+    #
+    # RSI 30 이하라고 자동 매수하지 않는다.
+    # Accumulation에서 최대 1점만 부여.
+    # ------------------------------------------------------------------
+
     if rsi is not None:
-        if rsi < 25: score+=3; reasons.append("RSI 극단적 과매도")
-        elif rsi < 35: score+=2; reasons.append("RSI 과매도")
-        elif rsi < 45: score+=1; reasons.append("RSI 조정 구간")
-        elif rsi > 75: score-=2; reasons.append("RSI 극단적 과열")
-        elif rsi > 65: score-=1; reasons.append("RSI 과열권")
-    if bb is not None:
-        if bb < 0: score+=2; reasons.append("볼린저 하단 이탈")
-        elif bb < 0.2: score+=1; reasons.append("볼린저 하단권")
-        elif bb > 1: score-=2; reasons.append("볼린저 상단 돌파 - 신규 매수 축소")
-        elif bb > 0.8: score-=1; reasons.append("볼린저 상단권")
-    if dist is not None:
-        if dist < -0.25: score+=2; reasons.append("MA200 대비 큰 할인")
-        elif dist < -0.10: score+=1; reasons.append("MA200 아래 조정")
-        elif dist > 0.35: score-=2; reasons.append("MA200 대비 과도한 이격")
-        elif dist > 0.20: score-=1; reasons.append("MA200 대비 높은 이격")
-    return {"score":score,"reasons":reasons,"drawdown":dd,"rsi":rsi,"bb_pctb":bb,"ma200_distance":dist}
 
-def calculate_risk_check(df, trend, fundamental_score, is_etf):
-    last=df.iloc[-1]; close=safe_float(last.get("Close")); ma200=safe_float(last.get("MA200")); slope=safe_float(last.get("MA200_Slope")); vr=safe_float(last.get("Volume_Ratio")); ret5=safe_float(last.get("Return_5D")); dd=calculate_current_drawdown(df)
-    flags=[]
-    if dd is not None and dd <= -0.20 and vr is not None and vr >= 2.5: flags.append("큰 하락과 거래량 급증 - 투매/구조적 악화 확인 필요")
-    if close is not None and ma200 is not None and close < ma200 and slope is not None and slope < 0: flags.append("가격과 MA200 장기 추세 모두 약화")
-    fundamental_value = None
-    if isinstance(fundamental_score, dict):
-        fundamental_value = safe_float(fundamental_score.get("score"))
+        if rsi < 30:
+
+            score += 1
+            reasons.append(
+                "RSI 과매도권"
+            )
+
+        elif rsi < 40:
+
+            score += 1
+            reasons.append(
+                "RSI 조정권"
+            )
+
+    # ------------------------------------------------------------------
+    # 4. MA200 대비 가격 위치
+    #
+    # 장기 추세가 유지되는 상태에서 MA200과의 거리가 좁혀질수록
+    # 장기투자자에게 가격 매력도가 증가한다고 판단.
+    #
+    # 단, 가격이 MA200 아래로 크게 이탈하면
+    # 단순 할인으로 보지 않고 Risk에서 별도 확인한다.
+    # ------------------------------------------------------------------
+
+    if ma200_distance is not None:
+
+        if -0.05 <= ma200_distance <= 0.10:
+
+            score += 2
+            reasons.append(
+                "MA200 근접 - 장기 평균 대비 가격 부담 완화"
+            )
+
+        elif ma200_distance < -0.05:
+
+            score += 2
+            reasons.append(
+                "MA200 아래 - 큰 조정 구간"
+            )
+
+        elif ma200_distance <= 0.20:
+
+            score += 1
+            reasons.append(
+                "MA200 대비 과도하지 않은 이격"
+            )
+
+        elif ma200_distance > 0.35:
+
+            reasons.append(
+                "MA200 대비 과도한 상승 이격"
+            )
+
+    # ------------------------------------------------------------------
+    # Level
+    # ------------------------------------------------------------------
+
+    if score >= 7:
+
+        level = "VERY HIGH"
+
+    elif score >= 5:
+
+        level = "HIGH"
+
+    elif score >= 3:
+
+        level = "MODERATE"
+
+    elif score >= 1:
+
+        level = "LOW"
+
     else:
-        fundamental_value = safe_float(fundamental_score)
-    if (not is_etf) and fundamental_value is not None and fundamental_value <= 0:
-        flags.append("펀더멘털 점수 약화 - 투자 논리 재점검")
-    if len(flags)>=2: status="THESIS REVIEW"
-    elif flags: status="CAUTION"
-    else: status="NORMAL"
-    return {"status":status,"flags":flags,"volume_ratio":vr,"return_5d":ret5}
 
-def determine_long_term_decision(trend, accumulation, risk):
-    reasons=[]
-    if risk["status"] == "THESIS REVIEW": return {"signal":"THESIS REVIEW","reasons":risk["flags"]}
-    score=accumulation["score"]
-    if risk["status"] == "CAUTION": score=min(score,3); reasons.extend(risk["flags"])
-    if score >= 10: signal="AGGRESSIVE ACCUMULATE"
-    elif score >= 7: signal="STRONG ACCUMULATE"
-    elif score >= 4: signal="ACCUMULATE"
-    elif score >= 1: signal="NORMAL DCA"
-    elif score >= -1: signal="HOLD / LIGHT DCA"
-    else: signal="HOLD / WAIT"
-    if trend["status"] == "WEAK" and signal in ("AGGRESSIVE ACCUMULATE","STRONG ACCUMULATE"): signal="ACCUMULATE / CAUTION"; reasons.append("장기 추세 약화로 공격적 매수 제한")
-    reasons.extend(accumulation["reasons"])
-    if not reasons: reasons.append("공포/할인 신호가 부족하므로 기본 적립 또는 보유")
-    return {"signal":signal,"reasons":reasons}
+        level = "NONE"
+
+    return {
+
+        "score": score,
+
+        "max_score": max_score,
+
+        "level": level,
+
+        "reasons": reasons,
+
+        "drawdown": dd,
+
+        "rsi": rsi,
+
+        "bb_pctb": bb,
+
+        "ma200_distance": ma200_distance
+
+    }
+
+
+# ==============================================================================================
+# 12B-4. BOTTOMING SCORE
+# ==============================================================================================
+#
+# 의미:
+# "많이 떨어졌는가?"가 아니라
+# "하락 압력이 약해지고 실제로 바닥을 형성하는 과정에 들어갔는가?"
+#
+# 총점 : 10점
+#
+# 1. 최근 저점 갱신 중단
+# 2. 최근 가격 모멘텀 개선
+# 3. ATR 감소
+# 4. RSI 회복
+# 5. MACD Histogram 개선
+# 6. MA20 하락 둔화/상승
+# 7. 가격의 MA20 회복
+# 8. 상대강도 회복
+# 9. 하락 거래량 감소
+# 10. Bollinger Width 수축
+#
+# ==============================================================================================
+
+def calculate_bottoming_score(df):
+
+    last = df.iloc[-1]
+
+    score = 0
+    max_score = 10
+
+    reasons = []
+
+    close = safe_float(
+        last.get("Close")
+    )
+
+    ma20 = safe_float(
+        last.get("MA20")
+    )
+
+    rsi = safe_float(
+        last.get("RSI")
+    )
+
+    atr_pct = safe_float(
+        last.get("ATR_Pct")
+    )
+
+    volume_ratio = safe_float(
+        last.get("Volume_Ratio")
+    )
+
+    rs = safe_float(
+        last.get("Relative_Strength")
+    )
+
+    rs_ma20 = safe_float(
+        last.get("RS_MA20")
+    )
+
+    bb_width = safe_float(
+        last.get("BB_Width")
+    )
+
+    bb_width_ma50 = safe_float(
+        last.get("BB_Width_MA50")
+    )
+
+    macd_hist = safe_float(
+        last.get("MACD_Hist")
+    )
+
+    previous_macd_hist = safe_float(
+        df["MACD_Hist"].iloc[-2]
+    ) if len(df) >= 2 else None
+
+    # ------------------------------------------------------------------
+    # 1. 최근 저점 갱신 중단
+    #
+    # 최근 10일 저점과 5일 저점을 비교한다.
+    # 최근 5일 저점이 그 이전 5일보다 높으면 긍정.
+    # ------------------------------------------------------------------
+
+    if len(df) >= 10:
+
+        previous_low = safe_float(
+            df["Low"].iloc[-10:-5].min()
+        )
+
+        recent_low = safe_float(
+            df["Low"].iloc[-5:].min()
+        )
+
+        if (
+            previous_low is not None
+            and recent_low is not None
+            and recent_low >= previous_low
+        ):
+
+            score += 1
+
+            reasons.append(
+                "최근 저점 갱신 중단 - 하락 압력 둔화"
+            )
+
+    # ------------------------------------------------------------------
+    # 2. 최근 가격 모멘텀
+    #
+    # 최근 5일 수익률이 양수면 단기 하락 압력이 완화되는 것으로 판단.
+    # ------------------------------------------------------------------
+
+    if len(df) >= 6:
+
+        return_5d = safe_float(
+            df["Close"].iloc[-1]
+            /
+            df["Close"].iloc[-6]
+            - 1
+        )
+
+        if return_5d is not None:
+
+            if return_5d > 0:
+
+                score += 1
+
+                reasons.append(
+                    "최근 5일 가격 모멘텀 회복"
+                )
+
+    # ------------------------------------------------------------------
+    # 3. ATR 감소
+    #
+    # 현재 ATR이 10일 전보다 낮으면 변동성 축소.
+    # ------------------------------------------------------------------
+
+    if len(df) >= 11:
+
+        current_atr = safe_float(
+            df["ATR_Pct"].iloc[-1]
+        )
+
+        previous_atr = safe_float(
+            df["ATR_Pct"].iloc[-11]
+        )
+
+        if (
+            current_atr is not None
+            and previous_atr is not None
+            and current_atr < previous_atr
+        ):
+
+            score += 1
+
+            reasons.append(
+                "ATR 변동성 감소"
+            )
+
+    # ------------------------------------------------------------------
+    # 4. RSI 회복
+    #
+    # 단순히 RSI < 30을 매수 신호로 사용하지 않는다.
+    # 과매도 이후 회복하는지를 본다.
+    # ------------------------------------------------------------------
+
+    if len(df) >= 3:
+
+        previous_rsi = safe_float(
+            df["RSI"].iloc[-3]
+        )
+
+        if (
+            rsi is not None
+            and previous_rsi is not None
+            and rsi > previous_rsi
+            and rsi >= 35
+        ):
+
+            score += 1
+
+            reasons.append(
+                "RSI 저점권에서 회복"
+            )
+
+    # ------------------------------------------------------------------
+    # 5. MACD Histogram 개선
+    # ------------------------------------------------------------------
+
+    if (
+        macd_hist is not None
+        and previous_macd_hist is not None
+        and macd_hist > previous_macd_hist
+    ):
+
+        score += 1
+
+        reasons.append(
+            "MACD Histogram 개선 - 하락 모멘텀 둔화"
+        )
+
+    # ------------------------------------------------------------------
+    # 6. MA20 기울기
+    # ------------------------------------------------------------------
+
+    if len(df) >= 6:
+
+        ma20_previous = safe_float(
+            df["MA20"].iloc[-6]
+        )
+
+        if (
+            ma20 is not None
+            and ma20_previous is not None
+            and ma20 >= ma20_previous
+        ):
+
+            score += 1
+
+            reasons.append(
+                "MA20 하락 둔화/상승"
+            )
+
+    # ------------------------------------------------------------------
+    # 7. 가격이 MA20 회복
+    # ------------------------------------------------------------------
+
+    if (
+        close is not None
+        and ma20 is not None
+        and close > ma20
+    ):
+
+        score += 1
+
+        reasons.append(
+            "가격이 MA20 회복"
+        )
+
+    # ------------------------------------------------------------------
+    # 8. 상대강도 회복
+    # ------------------------------------------------------------------
+
+    if (
+        rs is not None
+        and rs_ma20 is not None
+        and rs > rs_ma20
+    ):
+
+        score += 1
+
+        reasons.append(
+            "상대강도 MA20 회복"
+        )
+
+    # ------------------------------------------------------------------
+    # 9. 거래량 안정
+    #
+    # 무조건 거래량이 작아야 하는 것은 아니다.
+    # 큰 하락 중 거래량 급증은 매도 압력으로 본다.
+    # 현재 가격이 안정되는 과정에서 평균 수준의 거래량이면 긍정.
+    # ------------------------------------------------------------------
+
+    if volume_ratio is not None:
+
+        if volume_ratio < 1.2:
+
+            score += 1
+
+            reasons.append(
+                "하락 과정의 거래량 과열 없음"
+            )
+
+    # ------------------------------------------------------------------
+    # 10. Bollinger Width 수축
+    #
+    # 변동성이 줄어들면서 가격이 압축되는 과정.
+    # 단독으로 매수 신호가 아니라 Bottoming 보조 확인.
+    # ------------------------------------------------------------------
+
+    if (
+        bb_width is not None
+        and bb_width_ma50 is not None
+        and bb_width < bb_width_ma50
+    ):
+
+        score += 1
+
+        reasons.append(
+            "Bollinger Width 축소 - 변동성 안정"
+        )
+
+    # ------------------------------------------------------------------
+    # Bottoming Level
+    # ------------------------------------------------------------------
+
+    if score >= 8:
+
+        level = "CONFIRMED"
+
+    elif score >= 6:
+
+        level = "STRONG"
+
+    elif score >= 4:
+
+        level = "EARLY"
+
+    elif score >= 2:
+
+        level = "WEAK"
+
+    else:
+
+        level = "NONE"
+
+    return {
+
+        "score": score,
+
+        "max_score": max_score,
+
+        "level": level,
+
+        "reasons": reasons
+
+    }
+
+
+# ==============================================================================================
+# 12B-5. RISK CHECK
+# ==============================================================================================
+
+def calculate_risk_check(
+    df,
+    trend,
+    fundamental_score,
+    is_etf
+):
+
+    last = df.iloc[-1]
+
+    close = safe_float(
+        last.get("Close")
+    )
+
+    ma200 = safe_float(
+        last.get("MA200")
+    )
+
+    slope = safe_float(
+        last.get("MA200_Slope")
+    )
+
+    volume_ratio = safe_float(
+        last.get("Volume_Ratio")
+    )
+
+    dd = calculate_current_drawdown(
+        df
+    )
+
+    flags = []
+
+    # ------------------------------------------------------------------
+    # 큰 하락 + 거래량 급증
+    # ------------------------------------------------------------------
+
+    if (
+        dd is not None
+        and dd <= -0.20
+        and volume_ratio is not None
+        and volume_ratio >= 2.5
+    ):
+
+        flags.append(
+            "큰 하락과 거래량 급증 - 투매/구조적 악화 확인 필요"
+        )
+
+    # ------------------------------------------------------------------
+    # MA200 구조 붕괴
+    # ------------------------------------------------------------------
+
+    if (
+        close is not None
+        and ma200 is not None
+        and close < ma200
+        and slope is not None
+        and slope < 0
+    ):
+
+        flags.append(
+            "가격과 MA200 장기 추세 모두 약화"
+        )
+
+    # ------------------------------------------------------------------
+    # 개별주 펀더멘털
+    #
+    # fundamental_score가 dict인 경우와 숫자인 경우 모두 대응.
+    # 기존 코드에서 발생했던
+    # TypeError: '<=' not supported between instances of 'dict' and 'int'
+    # 문제도 방지한다.
+    # ------------------------------------------------------------------
+
+    fundamental_value = None
+
+    if isinstance(
+        fundamental_score,
+        dict
+    ):
+
+        fundamental_value = safe_float(
+            fundamental_score.get("score")
+        )
+
+    else:
+
+        fundamental_value = safe_float(
+            fundamental_score
+        )
+
+    if (
+        not is_etf
+        and fundamental_value is not None
+        and fundamental_value <= 0
+    ):
+
+        flags.append(
+            "펀더멘털 점수 약화 - 투자 논리 재점검"
+        )
+
+    # ------------------------------------------------------------------
+    # Risk status
+    # ------------------------------------------------------------------
+
+    if len(flags) >= 2:
+
+        status = "THESIS REVIEW"
+
+    elif len(flags) == 1:
+
+        status = "CAUTION"
+
+    else:
+
+        status = "NORMAL"
+
+    return {
+
+        "status": status,
+
+        "flags": flags,
+
+        "volume_ratio": volume_ratio
+
+    }
+
+
+# ==============================================================================================
+# 12B-6. FINAL LONG-TERM DECISION
+# ==============================================================================================
+#
+# 네 투자철학을 가장 직접적으로 반영하는 부분.
+#
+# 기본 원칙:
+#
+# 1. Trend가 무너지지 않았다면 보유를 우선.
+# 2. Accumulation이 높으면 매수 확대 가능.
+# 3. Bottoming이 높을수록 적극적 매수에 가까워짐.
+# 4. Bottoming이 낮으면 아직 하락 중일 가능성을 인정.
+# 5. Risk가 정상이어야 공격적 매수를 허용.
+# 6. 단기 Sell Signal은 최종 매도 명령으로 사용하지 않는다.
+#
+# ==============================================================================================
+
+def determine_long_term_decision(
+    trend,
+    accumulation,
+    bottoming,
+    risk
+):
+
+    trend_score = trend["score"]
+
+    accumulation_score = accumulation["score"]
+
+    bottoming_score = bottoming["score"]
+
+    risk_status = risk["status"]
+
+    reasons = []
+
+    # ==========================================================================================
+    # 1. 구조적 위험
+    # ==========================================================================================
+
+    if risk_status == "THESIS REVIEW":
+
+        reasons.extend(
+            risk["flags"]
+        )
+
+        return {
+
+            "signal": "BUY PAUSE",
+
+            "reasons": reasons
+
+        }
+
+    # ==========================================================================================
+    # 2. 장기 추세가 완전히 깨진 경우
+    #
+    # 네 철학상 매도보다는 신규매수를 멈추는 방향.
+    # ==========================================================================================
+
+    if trend_score <= 1:
+
+        reasons.append(
+            "장기 추세가 약화되어 신규 매수보다 추세 확인이 우선"
+        )
+
+        return {
+
+            "signal": "BUY PAUSE",
+
+            "reasons": reasons
+
+        }
+
+    # ==========================================================================================
+    # 3. Risk CAUTION
+    #
+    # 매도하지 않는다.
+    # 다만 신규 매수 강도를 제한한다.
+    # ==========================================================================================
+
+    if risk_status == "CAUTION":
+
+        reasons.extend(
+            risk["flags"]
+        )
+
+    # ==========================================================================================
+    # 4. STRONG ACCUMULATE
+    #
+    # 조건:
+    # 장기추세 건강
+    # + 조정 충분
+    # + 바닥 형성 신호도 강함
+    # + Risk 정상
+    # ==========================================================================================
+
+    if (
+        trend_score >= 3
+        and accumulation_score >= 6
+        and bottoming_score >= 6
+        and risk_status == "NORMAL"
+    ):
+
+        reasons.extend(
+            [
+                "장기 상승추세 유지",
+                "충분한 조정으로 장기 매수 매력 증가",
+                "하락 압력 둔화 및 바닥 형성 신호 확인"
+            ]
+        )
+
+        return {
+
+            "signal": "STRONG ACCUMULATE",
+
+            "reasons": reasons
+
+        }
+
+    # ==========================================================================================
+    # 5. ACCUMULATE
+    #
+    # 조정은 충분하지만 바닥 형성이 아직 완전히 확인되지 않을 수도 있다.
+    # ==========================================================================================
+
+    if (
+        trend_score >= 3
+        and accumulation_score >= 5
+    ):
+
+        if bottoming_score >= 4:
+
+            reasons.extend(
+                [
+                    "장기 상승추세 유지",
+                    "충분한 조정",
+                    "바닥 형성 초기/진행 신호"
+                ]
+            )
+
+        else:
+
+            reasons.extend(
+                [
+                    "장기 상승추세 유지",
+                    "충분한 조정",
+                    "다만 바닥 형성은 아직 초기 단계"
+                ]
+            )
+
+        return {
+
+            "signal": "ACCUMULATE",
+
+            "reasons": reasons
+
+        }
+
+    # ==========================================================================================
+    # 6. NORMAL DCA
+    # ==========================================================================================
+
+    if (
+        trend_score >= 3
+        and accumulation_score >= 3
+    ):
+
+        reasons.extend(
+            [
+                "장기 상승추세 유지",
+                "분할매수 가능",
+                "공격적 매수 근거는 아직 부족"
+            ]
+        )
+
+        return {
+
+            "signal": "NORMAL DCA",
+
+            "reasons": reasons
+
+        }
+
+    # ==========================================================================================
+    # 7. HOLD
+    # ==========================================================================================
+
+    if trend_score >= 2:
+
+        reasons.extend(
+            [
+                "장기 추세가 아직 유지됨",
+                "기존 보유분은 유지",
+                "신규 매수는 서두르지 않음"
+            ]
+        )
+
+        return {
+
+            "signal": "HOLD",
+
+            "reasons": reasons
+
+        }
+
+    # ==========================================================================================
+    # 8. 기본
+    # ==========================================================================================
+
+    return {
+
+        "signal": "HOLD",
+
+        "reasons": [
+
+            "추세 및 매수 근거가 충분하지 않음",
+
+            "기존 포지션은 불필요하게 매도하지 않음"
+
+        ]
+
+    }
+
+# ==============================================================================================
+# 13. FINAL DECISION ENGINE
+# ==============================================================================================
+
+def determine_final_signal(
+    technical,
+    market_regime,
+    fundamental_score,
+    is_etf
+):
+
+    score = technical["score"]
+
+    strong_trend = technical[
+        "strong_trend"
+    ]
+
+    rsi = technical["rsi"]
+
+    reasons = []
+
+    # ------------------------------------------------------------------------------------------
+    # RISK OFF
+    # ------------------------------------------------------------------------------------------
+
+    if (
+        market_regime["regime"] == "BEAR"
+        and score <= 1
+    ):
+
+        return {
+            "signal": "RISK OFF",
+            "score": score,
+            "reasons": [
+                "시장 하락 추세",
+                "자산 기술적 점수 약세"
+            ]
+        }
+
+    # ------------------------------------------------------------------------------------------
+    # REDUCE
+    #
+    # RSI 과매수 하나로 매도하지 않는다.
+    # 장기 추세 붕괴가 함께 나타날 때만 REDUCE.
+    # ------------------------------------------------------------------------------------------
+
+    if score <= 0:
+
+        return {
+            "signal": "REDUCE",
+            "score": score,
+            "reasons": [
+                "기술적 추세와 상대강도가 약화"
+            ]
+        }
+
+    # ------------------------------------------------------------------------------------------
+    # STRONG BUY
+    # ------------------------------------------------------------------------------------------
+
+    if (
+        score >= 10
+        and strong_trend
+        and market_regime["regime"]
+        in ["STRONG_BULL", "BULL"]
+    ):
+
+        reasons.append(
+            "장기 상승 추세"
+        )
+
+        reasons.append(
+            "시장 대비 상대강도 우위"
+        )
+
+        reasons.append(
+            "다수의 기술적 조건 동시 충족"
+        )
+
+        if not is_etf:
+
+            if (
+                fundamental_score["score"]
+                is not None
+                and fundamental_score["score"] >= 3
+            ):
+
+                reasons.append(
+                    "펀더멘털 양호"
+                )
+
+        return {
+            "signal": "STRONG BUY",
+            "score": score,
+            "reasons": reasons
+        }
+
+    # ------------------------------------------------------------------------------------------
+    # BUY
+    # ------------------------------------------------------------------------------------------
+
+    if (
+        score >= 7
+        and strong_trend
+    ):
+
+        return {
+            "signal": "BUY",
+            "score": score,
+            "reasons": [
+                "상승 추세 유지",
+                "상대강도/모멘텀 양호",
+                "분할 매수 가능 구간"
+            ]
+        }
+
+    # ------------------------------------------------------------------------------------------
+    # HOLD
+    # ------------------------------------------------------------------------------------------
+
+    if (
+        score >= 4
+    ):
+
+        if (
+            rsi is not None
+            and rsi > 80
+        ):
+
+            return {
+                "signal": "HOLD",
+                "score": score,
+                "reasons": [
+                    "추세는 유지",
+                    "다만 RSI 과열로 신규 매수 속도 조절"
+                ]
+            }
+
+        return {
+            "signal": "HOLD",
+            "score": score,
+            "reasons": [
+                "기존 상승 구조 유지",
+                "즉각적인 비중 확대 근거 부족"
+            ]
+        }
+
+    # ------------------------------------------------------------------------------------------
+    # WAIT
+    # ------------------------------------------------------------------------------------------
+
+    return {
+        "signal": "WAIT",
+        "score": score,
+        "reasons": [
+            "신규 매수 확신 부족",
+            "추세 또는 상대강도 개선 대기"
+        ]
+    }
+
 
 # ==============================================================================================
 # 14. FEAR & GREED
@@ -2308,6 +3444,7 @@ asset_df = calculate_relative_strength(
 # 현재 기술 지표를 분석 단계에서 즉시 출력
 last = asset_df.iloc[-1]
 current_price = safe_float(last["Close"])
+current_max = safe_float(asset_df["High"].tail(252).max())
 current_rsi = safe_float(last["RSI"])
 current_atr_pct = safe_float(last["ATR_Pct"])
 current_volume_ratio = safe_float(last["Volume_Ratio"])
@@ -2318,7 +3455,8 @@ current_ma200_distance = None
 if safe_float(last.get("MA200")) not in (None, 0) and current_price is not None:
     current_ma200_distance = current_price / safe_float(last["MA200"]) - 1
 
-print(f"현재 가격                : {fmt_num(current_price)}")
+print(f"Current                  : {fmt_num(current_price)}")
+print(f"52W High                 : {fmt_num(current_max)}")
 print(f"MA20                     : {fmt_num(last.get('MA20'))}")
 print(f"MA50                     : {fmt_num(last.get('MA50'))}")
 print(f"MA100                    : {fmt_num(last.get('MA100'))}")
@@ -2425,14 +3563,32 @@ except Exception as e:
         f"Fear & Greed 데이터 로딩 실패: {e}"
     }
 
-
 # ==============================================================================================
-# 22B. ACCUMULATION / RISK / FINAL DECISION
+# 22B. ACCUMULATION / BOTTOMING / RISK / FINAL DECISION
 # ==============================================================================================
 
-accumulation = calculate_accumulation_score(asset_df, fng_result.get("value"))
-risk_check = calculate_risk_check(asset_df, trend, fundamental_score, fundamental["is_etf"])
-final_decision = determine_long_term_decision(trend, accumulation, risk_check)
+accumulation = calculate_accumulation_score(
+    asset_df,
+    fng_result.get("value")
+)
+
+bottoming = calculate_bottoming_score(
+    asset_df
+)
+
+risk_check = calculate_risk_check(
+    asset_df,
+    trend,
+    fundamental_score,
+    fundamental["is_etf"]
+)
+
+final_decision = determine_long_term_decision(
+    trend,
+    accumulation,
+    bottoming,
+    risk_check
+)
 
 # ==============================================================================================
 # 23. PERFORMANCE
@@ -2469,8 +3625,13 @@ current_rs = safe_float(
     last["Relative_Strength"]
 )
 
-current_fx = latest(fx_df["Close"]) if not fx_df.empty else None
-current_dxy = latest(dxy_df["Close"]) if not dxy_df.empty else None
+current_fx = safe_float(
+    fx_df["Close"].iloc[-1]
+)
+
+current_dxy = safe_float(
+    dxy_df["Close"].iloc[-1]
+)
 
 
 # ==============================================================================================
@@ -2525,11 +3686,80 @@ for reason in final_decision["reasons"]:
 
 print()
 
-print("[ TREND / ACCUMULATION / RISK ]")
-print(f"Trend Score               : {trend['score']} ({trend['status']})")
-print(f"Accumulation Score        : {accumulation['score']}")
-print(f"Current Drawdown          : {fmt_pct(accumulation['drawdown'])}")
-print(f"Risk Check                : {risk_check['status']}")
+print()
+print("[ TREND / ACCUMULATION / BOTTOMING / RISK ]")
+
+print(
+    f"Trend Score               : "
+    f"{trend['score']} / {trend['max_score']} "
+    f"({trend['status']})"
+)
+
+print(
+    f"Accumulation Score        : "
+    f"{accumulation['score']} / {accumulation['max_score']} "
+    f"({accumulation['level']})"
+)
+
+print(
+    f"Bottoming Score           : "
+    f"{bottoming['score']} / {bottoming['max_score']} "
+    f"({bottoming['level']})"
+)
+
+print(
+    f"Current Drawdown          : "
+    f"{fmt_pct(accumulation['drawdown'])}"
+)
+
+print(
+    f"Risk Check                : "
+    f"{risk_check['status']}"
+)
+
+print()
+
+print("[ TREND REASONS ]")
+
+for reason in trend["reasons"]:
+
+    print(
+        f"  - {reason}"
+    )
+
+print()
+
+print("[ ACCUMULATION REASONS ]")
+
+for reason in accumulation["reasons"]:
+
+    print(
+        f"  - {reason}"
+    )
+
+print()
+
+print("[ BOTTOMING REASONS ]")
+
+for reason in bottoming["reasons"]:
+
+    print(
+        f"  - {reason}"
+    )
+
+if risk_check["flags"]:
+
+    print()
+
+    print("[ RISK FLAGS ]")
+
+    for flag in risk_check["flags"]:
+
+        print(
+            f"  - {flag}"
+        )
+
+
 for flag in risk_check['flags']:
     print(f"  - {flag}")
 
@@ -2829,8 +4059,7 @@ plt.grid(alpha=0.3)
 
 plt.tight_layout()
 
-save_or_close_chart("price_trend.png")
-print("차트 해석: Close와 MA200의 관계를 가장 먼저 봅니다. 가격이 MA200 위이고 MA200이 상승하면 장기 상승추세로 봅니다. MA20/50은 조정 후 재진입 위치를 보는 보조선입니다.")
+plt.close()
 
 
 # ==============================================================================================
@@ -2853,8 +4082,7 @@ plt.grid(alpha=0.3)
 
 plt.tight_layout()
 
-save_or_close_chart("rsi.png")
-print("차트 해석: RSI 70 이상을 자동 매도로 사용하지 않습니다. 상승추세에서는 50~70도 정상적인 강세일 수 있고, 30 이하에서는 추세가 유지되는지 확인한 뒤 분할매수 후보로 봅니다.")
+plt.close()
 
 
 # ==============================================================================================
@@ -2897,8 +4125,7 @@ plt.grid(alpha=0.3)
 
 plt.tight_layout()
 
-save_or_close_chart("macd.png")
-print("차트 해석: MACD는 추세의 방향과 변화 속도를 봅니다. 골든/데드크로스 하나만으로 매수·매도하지 않고 히스토그램 개선 여부를 보조적으로 확인합니다.")
+plt.close()
 
 
 # ==============================================================================================
@@ -2937,8 +4164,7 @@ plt.grid(alpha=0.3)
 
 plt.tight_layout()
 
-save_or_close_chart("relative_strength.png")
-print("차트 해석: 1.0 자체보다 RS의 방향과 RS MA20/60 위·아래를 봅니다. 벤치마크보다 지속적으로 강하면 장기 보유 자산으로서 우위가 있다는 의미입니다.")
+plt.close()
 
 
 # ==============================================================================================
@@ -2966,8 +4192,7 @@ plt.grid(alpha=0.3)
 
 plt.tight_layout()
 
-save_or_close_chart("volume_ratio.png")
-print("차트 해석: 1.0은 20일 평균 거래량입니다. 1.2 이상은 가격 돌파가 거래량으로 확인되는지 보는 기준이며, 거래량 하나만으로 매수하지 않습니다.")
+plt.close()
 
 
 # ==============================================================================================
@@ -2981,8 +4206,7 @@ plt.ylabel("%")
 plt.legend()
 plt.grid(alpha=0.3)
 plt.tight_layout()
-save_or_close_chart("atr.png")
-print("차트 해석: ATR%는 가격 변동성입니다. 높아질수록 매수 타이밍의 변동폭이 커졌다는 의미이지 매도 신호 자체는 아닙니다.")
+plt.close()
 
 # ==============================================================================================
 # 32. CHART 7 - FEAR & GREED
@@ -2998,8 +4222,7 @@ if fng_df is not None and not fng_df.empty:
     plt.legend()
     plt.grid(alpha=0.3)
     plt.tight_layout()
-    save_or_close_chart("fear_greed.png")
-print("차트 해석: 25 이하 공포는 장기 투자자에게 관심 구간입니다. 75 이상 탐욕은 신규매수 속도를 늦추는 참고자료이지 기존 ETF 자동매도 신호가 아닙니다.")
+    plt.close()
 # ==============================================================================================
 # 33. CHART 8 - USD/KRW
 # ==============================================================================================
@@ -3010,8 +4233,7 @@ plt.title("USD/KRW")
 plt.legend()
 plt.grid(alpha=0.3)
 plt.tight_layout()
-save_or_close_chart("usdkrw.png")
-print("차트 해석: 원화 투자자의 실제 체감 수익률과 달러자산 가치에 영향을 주는 환율입니다. ETF 매매 신호의 핵심이 아니라 거시환경 참고자료입니다.")
+plt.close()
 
 # ==============================================================================================
 # 34. CHART 9 - DXY
@@ -3023,8 +4245,7 @@ plt.title("Dollar Index")
 plt.legend()
 plt.grid(alpha=0.3)
 plt.tight_layout()
-save_or_close_chart("dxy.png")
-print("차트 해석: 달러 강세/약세 환경을 확인합니다. 금리·유동성·위험선호와 함께 해석하며 단독 매매신호로 사용하지 않습니다.")
+plt.close()
 
 # ==============================================================================================
 # 35. FINAL SUMMARY
@@ -3039,55 +4260,132 @@ print(
     f"{final_decision['signal']}"
 )
 
-print(
-    f"Trend Score     : "
-    f"{trend['score']} / 4 ({trend['status']})"
-)
+print()
 
 print(
-    f"Accumulation    : "
-    f"{accumulation['score']}"
-)
-
-print(
-    f"Risk Check      : "
-    f"{risk_check['status']}"
-)
-
-print(
-    f"Market Regime   : "
+    f"Market Regime      : "
     f"{market_regime['regime']}"
 )
 
-if not fundamental["is_etf"]:
+print(
+    f"Asset Trend        : "
+    f"{trend['score']} / {trend['max_score']} "
+    f"({trend['status']})"
+)
+
+print(
+    f"Accumulation       : "
+    f"{accumulation['score']} / {accumulation['max_score']} "
+    f"({accumulation['level']})"
+)
+
+print(
+    f"Bottoming          : "
+    f"{bottoming['score']} / {bottoming['max_score']} "
+    f"({bottoming['level']})"
+)
+
+print(
+    f"Risk Check         : "
+    f"{risk_check['status']}"
+)
+
+print()
+
+print(
+    "FINAL DECISION REASONS"
+)
+
+for reason in final_decision["reasons"]:
 
     print(
-        f"Fundamental    : "
-        f"{fundamental_score['grade']}"
+        f"  - {reason}"
     )
 
 print()
 
-print("중요 원칙:")
-print("1. RSI 70 이상 = 자동 매도가 아님.")
-print("2. Bollinger Upper 돌파 = 자동 매도가 아님.")
-print("3. Fear & Greed Extreme Greed = 자동 매도가 아님.")
-print("4. RSI 30 이하 = 자동 매수가 아님.")
-print("5. 가장 중요한 판단 순서:")
-print("   Market Regime")
-print("   -> Long-term Trend")
-print("   -> Relative Strength")
-print("   -> Momentum")
-print("   -> Entry Timing")
-print("   -> Volatility Risk")
-print("   -> Fundamental")
-print("   -> Final Decision")
-# endregion
+print(
+    "판단 기준:"
+)
 
+print(
+    "  Market Regime"
+    " = 미국 주식시장 전체의 환경"
+)
+
+print(
+    "  Asset Trend"
+    " = 분석 대상 ETF/종목 자체의 장기 추세"
+)
+
+print(
+    "  Accumulation"
+    " = 현재 가격 조정이 장기투자자에게 얼마나 매력적인가"
+)
+
+print(
+    "  Bottoming"
+    " = 하락 압력이 약해지고 바닥 형성 과정에 들어갔는가"
+)
+
+print(
+    "  Risk Check"
+    " = 장기 투자 논리를 훼손할 위험이 있는가"
+)
+
+print()
+
+print(
+    "중요 원칙:"
+)
+
+print(
+    "1. RSI 70 이상 = 자동 매도가 아님."
+)
+
+print(
+    "2. Bollinger Upper 돌파 = 자동 매도가 아님."
+)
+
+print(
+    "3. Fear & Greed Extreme Greed = 자동 매도가 아님."
+)
+
+print(
+    "4. RSI 30 이하 = 자동 매수가 아님."
+)
+
+print(
+    "5. 큰 조정 = Accumulation 근거이지 저점 확정이 아님."
+)
+
+print(
+    "6. Bottoming Score가 높아질수록 실제 바닥 형성 가능성을 높게 평가."
+)
+
+print(
+    "7. 장기 추세가 유지되는 동안 기존 포지션은 기본적으로 HOLD."
+)
+
+print(
+    "8. 매수 결정은 Market Regime"
+    " -> Asset Trend"
+    " -> Accumulation"
+    " -> Bottoming"
+    " -> Risk 순서로 판단."
+)
+
+# ==============================================================================================
+# END
+# ==============================================================================================
+# endregion
 # ==============================================================================================
 # 36. GITHUB ACTIONS METADATA
 # ==============================================================================================
 with open("analysis_metadata.env", "w", encoding="utf-8") as f:
     f.write(f'ANALYSIS_DATE="{TODAY}"\n')
-    f.write(f'FINAL_SIGNAL="{final_decision["signal"]}"\n')
     f.write(f'TICKER="{ticker_symbol}"\n')
+    f.write(f'FINAL_SIGNAL="{final_decision["signal"]}"\n')
+
+print()
+print("GitHub metadata saved: analysis_metadata.env")
