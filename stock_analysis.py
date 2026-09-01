@@ -47,12 +47,6 @@ except Exception:
     pass
 matplotlib.rcParams["axes.unicode_minus"] = False
 
-SAVE_CHARTS = os.getenv("SAVE_CHARTS", "false").lower() == "true"
-
-CHART_DIR = "charts"
-
-if SAVE_CHARTS:
-    os.makedirs(CHART_DIR, exist_ok=True)
 # ==============================================================================================
 # 3. CONFIGURATION
 # ==============================================================================================
@@ -4077,7 +4071,6 @@ plt.grid(alpha=0.3)
 
 plt.tight_layout()
 
-plt.close()
 save_chart("price.png")
 
 # ==============================================================================================
@@ -4100,7 +4093,6 @@ plt.grid(alpha=0.3)
 
 plt.tight_layout()
 
-plt.close()
 save_chart("rsi.png")
 
 # ==============================================================================================
@@ -4143,7 +4135,6 @@ plt.grid(alpha=0.3)
 
 plt.tight_layout()
 
-plt.close()
 save_chart("macd.png")
 
 # ==============================================================================================
@@ -4182,7 +4173,6 @@ plt.grid(alpha=0.3)
 
 plt.tight_layout()
 
-plt.close()
 save_chart("relative_strength.png")
 
 # ==============================================================================================
@@ -4210,7 +4200,6 @@ plt.grid(alpha=0.3)
 
 plt.tight_layout()
 
-plt.close()
 save_chart("volume_ratio.png")
 
 # ==============================================================================================
@@ -4224,7 +4213,7 @@ plt.ylabel("%")
 plt.legend()
 plt.grid(alpha=0.3)
 plt.tight_layout()
-plt.close()
+
 save_chart("atr.png")
 
 # ==============================================================================================
@@ -4241,7 +4230,7 @@ if fng_df is not None and not fng_df.empty:
     plt.legend()
     plt.grid(alpha=0.3)
     plt.tight_layout()
-    plt.close()
+    
     save_chart("fearandgreedindex.png")
 # ==============================================================================================
 # 33. CHART 8 - USD/KRW
@@ -4253,7 +4242,7 @@ plt.title("USD/KRW")
 plt.legend()
 plt.grid(alpha=0.3)
 plt.tight_layout()
-plt.close()
+
 save_chart("usdkrw.png")
 
 # ==============================================================================================
@@ -4266,7 +4255,7 @@ plt.title("Dollar Index")
 plt.legend()
 plt.grid(alpha=0.3)
 plt.tight_layout()
-plt.close()
+
 save_chart("dxy.png")
 
 # ==============================================================================================
