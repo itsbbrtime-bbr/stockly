@@ -52,7 +52,8 @@ matplotlib.rcParams["axes.unicode_minus"] = False
 # ==============================================================================================
 
 NY_TZ = ZoneInfo("America/New_York")
-TODAY = datetime.now(NY_TZ).date()
+#TODAY = datetime.now(NY_TZ).date()
+TODAY = date.today()
 # TODAY = date(2026, 8, 17)  # backtest
 
 # 분석할 종목
