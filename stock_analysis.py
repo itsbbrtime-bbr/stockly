@@ -39,19 +39,18 @@ import os
 # ==============================================================================================
 
 try:
-    rc("font", family="AppleGothic")
+rc("font", family="DejaVu Sans")
 except Exception:
-    pass
-
+pass
 matplotlib.rcParams["axes.unicode_minus"] = False
 
 
 # ==============================================================================================
 # 3. CONFIGURATION
 # ==============================================================================================
-
+NY_TZ = ZoneInfo("America/New_York")
+#TODAY = datetime.now(NY_TZ).date()
 TODAY = date.today()
-#TODAY = date(2026,8,17) #back test
 
 # 분석할 종목
 # ticker_symbol = "QQQ" 
@@ -189,9 +188,9 @@ def fmt_pct(x, decimals=2):
 
 
 def print_section(title):
-    print("\n" + "=" * 120)
+    print("\n" + "=" * 33)
     print(title)
-    print("=" * 120)
+    print("=" * 33)
 
 
 def save_chart(filename):
