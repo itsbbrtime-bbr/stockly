@@ -14,23 +14,19 @@
 # 9. Fear & Greed는 매수/매도 버튼이 아닌 시장 심리 보조지표로 사용한다.
 # 10. 가격 성과와 전략 성과를 혼동하지 않는다.
 ################################################################################################
-# aier djhi qher azyh
 
 # ==============================================================================================
 # 1. IMPORT
 # ==============================================================================================
 
-import os
 import pandas as pd
 import numpy as np
-import matplotlib
-matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
+import matplotlib
 from matplotlib import rc
 
 from datetime import datetime, timedelta, date
-from zoneinfo import ZoneInfo
 
 import yfinance as yf
 import requests
@@ -42,28 +38,29 @@ import re
 # ==============================================================================================
 
 try:
-    rc("font", family="DejaVu Sans")
+    rc("font", family="AppleGothic")
 except Exception:
     pass
+
 matplotlib.rcParams["axes.unicode_minus"] = False
+
 
 # ==============================================================================================
 # 3. CONFIGURATION
 # ==============================================================================================
 
-NY_TZ = ZoneInfo("America/New_York")
-#TODAY = datetime.now(NY_TZ).date()
 TODAY = date.today()
-# TODAY = date(2026, 8, 17)  # backtest
+#TODAY = date(2026,8,17) #back test
 
 # 분석할 종목
 # ticker_symbol = "QQQ" 
 # ticker_symbol = "QLD"
 # ticker_symbol = "TQQQ"  
-# ticker_symbol = "SMH"
-ticker_symbol = os.getenv("TICKER", "SOXX")
+ticker_symbol = "SMH"
+# ticker_symbol = "SOXX"
 # ticker_symbol = "SOXQ"
 # ticker_symbol = "DRAM"
+# ticker_symbol = "423920.KS"
 
 # 개별주
 # ticker_symbol = "MSFT"
@@ -77,20 +74,16 @@ ticker_symbol = os.getenv("TICKER", "SOXX")
 # ticker_symbol = "PWR"
 
 # 시장 벤치마크
-MARKET_BENCHMARK = os.getenv("BENCHMARK", "VOO")
+MARKET_BENCHMARK = "VOO"
 
 # 상대강도 비교용
-RS_BENCHMARK = MARKET_BENCHMARK
+RS_BENCHMARK = "VOO"
 
 # 기술적 분석 기간
 # MA200을 안정적으로 계산하고 장기 추세/성과를 보기 위해 3년 사용
 ANALYSIS_YEARS = 1
 
 START_DATE = TODAY - timedelta(days=365 * ANALYSIS_YEARS)
-SAVE_CHARTS = os.getenv("SAVE_CHARTS", "true").lower() == "true"
-CHART_DIR = os.getenv("CHART_DIR", "charts")
-if SAVE_CHARTS:
-    os.makedirs(CHART_DIR, exist_ok=True)
 
 # 환율
 FX_TICKER = "USDKRW=X"
@@ -189,15 +182,9 @@ def fmt_pct(x, decimals=2):
 
 
 def print_section(title):
-    print("\n" + "=" * 33)
+    print("\n" + "=" * 120)
     print(title)
-    print("=" * 33)
-
-
-def save_or_close_chart(filename):
-    if SAVE_CHARTS:
-        plt.savefig(os.path.join(CHART_DIR, os.path.join(CHART_DIR, filename), dpi=150, bbox_inches="tight"), dpi=150, bbox_inches="tight")
-    plt.close()
+    print("=" * 120)
 
 
 def is_etf(symbol, info=None):
@@ -222,20 +209,7 @@ def is_etf(symbol, info=None):
 
     return False
 
-def save_chart(filename):
-    """
-    GitHub Actions에서 사용할 차트를 PNG로 저장.
-    SAVE_CHARTS=False이면 저장하지 않음.
-    """
-    if SAVE_CHARTS:
-        filepath = os.path.join(CHART_DIR, filename)
-        plt.savefig(
-            filepath,
-            dpi=150,
-            bbox_inches="tight"
-        )
 
-    plt.close()
 # ==============================================================================================
 # 5. DATA DOWNLOAD
 # ==============================================================================================
@@ -3462,7 +3436,7 @@ current_rsi = safe_float(last["RSI"])
 current_atr_pct = safe_float(last["ATR_Pct"])
 current_volume_ratio = safe_float(last["Volume_Ratio"])
 current_rs = safe_float(last["Relative_Strength"])
-current_drawdown = calculate_current_drawdown(asset_df)
+current_drawdown = safe_float(last.get("Drawdown"))
 current_bb_pct_b = safe_float(last.get("BB_PctB"))
 current_ma200_distance = None
 if safe_float(last.get("MA200")) not in (None, 0) and current_price is not None:
@@ -4006,6 +3980,52 @@ print(
     f"{fmt_num(performance['calmar_ratio'])}"
 )
 
+print()
+
+print(
+    "[ Analyzing Financial Indicators ]"
+)
+
+print("""
+Revenue (매출액)        : 기업이 상품이나 서비스를 팔아 벌어들인 총액입니다. '외형 성장'의 핵심 지표입니다.
+Net Income (당기순이익)   : 매출에서 모든 비용과 세금을 빼고 남은 최종 이익입니다. 주주에게 돌아가는 몫입니다.
+R&D (연구개발비)          : 미래 경쟁력을 위해 기술 개발에 투자하는 비용입니다. 성장주 분석에 중요합니다.
+Op Cash Flow (영업현금흐름) : 장부상이 아닌, 영업활동을 통해 실제로 회사 금고에 들어온 현금입니다.
+CapEx (설비투자)         : 미래를 위해 공장, 기계, 토지 등에 재투자한 비용입니다.
+Free Cash Flow (잉여현금흐름) : 영업으로 번 돈에서 투자를 뺀 '진짜 남는 돈'입니다. 배당이나 자사주 매입의 원천이 됩니다.
+Equity (자본)          : 회사의 주인인 주주들의 몫입니다. 자산에서 부채를 뺀 순자산입니다.
+Liabilities (부채)     : 회사가 갚아야 할 빚입니다. 자본 대비 너무 많으면 재무 리스크가 커집니다.
+Total Assets (자산)    : 자본과 부채를 합친 것으로, 현재 회사가 운용 중인 전체 자원 규모입니다.
+""")
+
+print("""
+Bollinger Band : 가격이 평균에서 얼마나 벗어났는지 확인.
+매수시그널 : 하단 돌파 시 과매도 영역 진입이므로 매수 검토
+매도시그널 : 상단 돌파 시 과매수 영역 진입이므로 매도 검토 
+밴드 수축 시 변동성 예고
+
+RSI (14days) : 최근 상승 vs 하락 강도를 비교해 과열/침체를 판단.
+매수시그널 : 30 이하면 침체
+매도시그널 : 70 이상이면 과열
+
+MACD : 두 이동평균선 간 거리 차이(추세 강도)를 분석 (단기 EMA - 장기 EMA)
+매수시그널 : MACD선이 Signal선을 위로 돌파
+매도시그널 : MACD선이 Signal선을 아래로 돌파
+
+OBV : 가격이 상승하면 거래량을 더하고, 하락하면 빼는 방식. 세력의 매집 여부를 판단 가능.
+매수시그널 : OBV > OBV_MA20 위로 돌파
+매도시그널 : OBV < OBV_MA20 아래로 돌파
+세력매집 : OBV 상승, 가격은 횡보 → 선행매수 기회
+이탈조짐 : OBV 하락, 가격은 상승 → 추세약화 경고
+
+CCI : 가격이 평균과 얼마나 다른지 측정.
+매수시그널 : -100 이하 과매도
+매도시그널 : +100 이상 과매수
+
+Stochastic : 종가가 최근 N일 동안의 최고/최저 범위에서 어디에 위치하는지 확인.
+매수시그널 : 20 이하 구간에서 %K(빠른선)가 %D(느린선)를 상향 돌파
+매도시그널 : 80 이상 구간에서 %K(빠른선)가 %D(느린선)를 하향 돌파
+""")
 
 # ==============================================================================================
 # 26. CHART 1 - PRICE / MA / BOLLINGER
@@ -4072,7 +4092,8 @@ plt.grid(alpha=0.3)
 
 plt.tight_layout()
 
-save_chart("price.png")
+plt.show()
+
 
 # ==============================================================================================
 # 27. CHART 2 - RSI
@@ -4094,7 +4115,8 @@ plt.grid(alpha=0.3)
 
 plt.tight_layout()
 
-save_chart("rsi.png")
+plt.show()
+
 
 # ==============================================================================================
 # 28. CHART 3 - MACD
@@ -4136,10 +4158,108 @@ plt.grid(alpha=0.3)
 
 plt.tight_layout()
 
-save_chart("macd.png")
+plt.show()
+
 
 # ==============================================================================================
-# 29. CHART 4 - RELATIVE STRENGTH
+# 29. CHART 4 - CCI
+# ==============================================================================================
+
+plt.figure(figsize=(14, 5))
+
+plt.plot(
+    asset_df.index,
+    asset_df["CCI"],
+    label="CCI"
+)
+
+plt.axhline(100, color="red", linestyle="--", label="Overbought")
+plt.axhline(0, color="gray", linestyle="--")
+plt.axhline(-100, color="blue", linestyle="--", label="Oversold")
+
+plt.title(
+    f"{ticker_symbol} CCI"
+)
+
+plt.legend()
+
+plt.grid(alpha=0.3)
+
+plt.tight_layout()
+
+plt.show()
+
+
+# ==============================================================================================
+# 30. CHART 5 - STOCHASTIC
+# ==============================================================================================
+
+plt.figure(figsize=(14, 5))
+
+plt.plot(
+    asset_df.index,
+    asset_df["Stoch_K"],
+    label="%K"
+)
+
+plt.plot(
+    asset_df.index,
+    asset_df["Stoch_D"],
+    label="%D",
+    linestyle="--"
+)
+
+plt.axhline(80, color="red", linestyle="--", label="Overbought")
+plt.axhline(50, color="gray", linestyle="--")
+plt.axhline(20, color="blue", linestyle="--", label="Oversold")
+
+plt.title(
+    f"{ticker_symbol} Stochastic"
+)
+
+plt.legend()
+
+plt.grid(alpha=0.3)
+
+plt.tight_layout()
+
+plt.show()
+
+
+# ==============================================================================================
+# 31. CHART 6 - OBV
+# ==============================================================================================
+
+plt.figure(figsize=(14, 5))
+
+plt.plot(
+    asset_df.index,
+    asset_df["OBV"],
+    label="OBV"
+)
+
+plt.plot(
+    asset_df.index,
+    asset_df["OBV_MA20"],
+    label="OBV MA20",
+    linestyle="--"
+)
+
+plt.title(
+    f"{ticker_symbol} OBV"
+)
+
+plt.legend()
+
+plt.grid(alpha=0.3)
+
+plt.tight_layout()
+
+plt.show()
+
+
+# ==============================================================================================
+# 32. CHART 7 - RELATIVE STRENGTH
 # ==============================================================================================
 
 plt.figure(figsize=(14, 5))
@@ -4174,10 +4294,11 @@ plt.grid(alpha=0.3)
 
 plt.tight_layout()
 
-save_chart("relative_strength.png")
+plt.show()
+
 
 # ==============================================================================================
-# 30. CHART 5 - VOLUME RATIO
+# 33. CHART 8 - VOLUME RATIO
 # ==============================================================================================
 
 plt.figure(figsize=(14, 5))
@@ -4201,10 +4322,11 @@ plt.grid(alpha=0.3)
 
 plt.tight_layout()
 
-save_chart("volume_ratio.png")
+plt.show()
+
 
 # ==============================================================================================
-# 31. CHART 6 - ATR %
+# 34. CHART 9 - ATR %
 # ==============================================================================================
 
 plt.figure(figsize=(14, 5))
@@ -4214,27 +4336,25 @@ plt.ylabel("%")
 plt.legend()
 plt.grid(alpha=0.3)
 plt.tight_layout()
-
-save_chart("atr.png")
+plt.show()
 
 # ==============================================================================================
-# 32. CHART 7 - FEAR & GREED
+# 35. CHART 10 - FEAR & GREED
 # ==============================================================================================
 
 if fng_df is not None and not fng_df.empty:
     plt.figure(figsize=(14, 5))
     plt.plot(fng_df.index, fng_df["fng"], label="Fear & Greed")
-    plt.axhline(25, color="blue", linestyle="--", label="Extreme Fear")
+    plt.axhline(30, color="blue", linestyle="--", label="Extreme Fear")
     plt.axhline(50, color="gray", linestyle="--")
-    plt.axhline(75, color="red", linestyle="--", label="Extreme Greed")
+    plt.axhline(70, color="red", linestyle="--", label="Extreme Greed")
     plt.title("CNN Fear & Greed Index")
     plt.legend()
     plt.grid(alpha=0.3)
     plt.tight_layout()
-    
-    save_chart("fearandgreedindex.png")
+    plt.show()
 # ==============================================================================================
-# 33. CHART 8 - USD/KRW
+# 36. CHART 11 - USD/KRW
 # ==============================================================================================
 
 plt.figure(figsize=(14, 5))
@@ -4243,11 +4363,10 @@ plt.title("USD/KRW")
 plt.legend()
 plt.grid(alpha=0.3)
 plt.tight_layout()
-
-save_chart("usdkrw.png")
+plt.show()
 
 # ==============================================================================================
-# 34. CHART 9 - DXY
+# 37. CHART 12 - DXY
 # ==============================================================================================
 
 plt.figure(figsize=(14, 5))
@@ -4256,11 +4375,10 @@ plt.title("Dollar Index")
 plt.legend()
 plt.grid(alpha=0.3)
 plt.tight_layout()
-
-save_chart("dxy.png")
+plt.show()
 
 # ==============================================================================================
-# 35. FINAL SUMMARY
+# 38. FINAL SUMMARY
 # ==============================================================================================
 
 print_section(
@@ -4391,13 +4509,3 @@ print(
 # END
 # ==============================================================================================
 # endregion
-# ==============================================================================================
-# 36. GITHUB ACTIONS METADATA
-# ==============================================================================================
-with open("analysis_metadata.env", "w", encoding="utf-8") as f:
-    f.write(f'ANALYSIS_DATE="{TODAY}"\n')
-    f.write(f'TICKER="{ticker_symbol}"\n')
-    f.write(f'FINAL_SIGNAL="{final_decision["signal"]}"\n')
-
-print()
-print("GitHub metadata saved: analysis_metadata.env")
