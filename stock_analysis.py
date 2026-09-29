@@ -27,6 +27,7 @@ import matplotlib
 from matplotlib import rc
 
 from datetime import datetime, timedelta, date
+from zoneinfo import ZoneInfo
 
 import yfinance as yf
 import requests
@@ -39,9 +40,9 @@ import os
 # ==============================================================================================
 
 try:
-rc("font", family="DejaVu Sans")
+    rc("font", family="DejaVu Sans")
 except Exception:
-pass
+    pass
 matplotlib.rcParams["axes.unicode_minus"] = False
 
 
