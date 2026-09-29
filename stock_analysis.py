@@ -31,6 +31,7 @@ from datetime import datetime, timedelta, date
 import yfinance as yf
 import requests
 import re
+import os
 
 
 # ==============================================================================================
@@ -84,6 +85,12 @@ RS_BENCHMARK = "VOO"
 ANALYSIS_YEARS = 1
 
 START_DATE = TODAY - timedelta(days=365 * ANALYSIS_YEARS)
+
+# GitHub Actions chart output
+SAVE_CHARTS = os.getenv("SAVE_CHARTS", "true").lower() == "true"
+CHART_DIR = os.getenv("CHART_DIR", "charts")
+if SAVE_CHARTS:
+    os.makedirs(CHART_DIR, exist_ok=True)
 
 # 환율
 FX_TICKER = "USDKRW=X"
@@ -185,6 +192,22 @@ def print_section(title):
     print("\n" + "=" * 120)
     print(title)
     print("=" * 120)
+
+
+def save_chart(filename):
+    """
+    GitHub Actions에서 사용할 차트를 PNG로 저장.
+    SAVE_CHARTS=False이면 저장하지 않음.
+    """
+    if SAVE_CHARTS:
+        filepath = os.path.join(CHART_DIR, filename)
+        plt.savefig(
+            filepath,
+            dpi=150,
+            bbox_inches="tight"
+        )
+
+    plt.close()
 
 
 def is_etf(symbol, info=None):
@@ -4092,7 +4115,7 @@ plt.grid(alpha=0.3)
 
 plt.tight_layout()
 
-plt.show()
+save_chart("price.png")
 
 
 # ==============================================================================================
@@ -4115,7 +4138,7 @@ plt.grid(alpha=0.3)
 
 plt.tight_layout()
 
-plt.show()
+save_chart("rsi.png")
 
 
 # ==============================================================================================
@@ -4158,7 +4181,7 @@ plt.grid(alpha=0.3)
 
 plt.tight_layout()
 
-plt.show()
+save_chart("macd.png")
 
 
 # ==============================================================================================
@@ -4187,7 +4210,7 @@ plt.grid(alpha=0.3)
 
 plt.tight_layout()
 
-plt.show()
+save_chart("cci.png")
 
 
 # ==============================================================================================
@@ -4223,7 +4246,7 @@ plt.grid(alpha=0.3)
 
 plt.tight_layout()
 
-plt.show()
+save_chart("stochastic.png")
 
 
 # ==============================================================================================
@@ -4255,7 +4278,7 @@ plt.grid(alpha=0.3)
 
 plt.tight_layout()
 
-plt.show()
+save_chart("obv.png")
 
 
 # ==============================================================================================
@@ -4294,7 +4317,7 @@ plt.grid(alpha=0.3)
 
 plt.tight_layout()
 
-plt.show()
+save_chart("relative_strength.png")
 
 
 # ==============================================================================================
@@ -4322,7 +4345,7 @@ plt.grid(alpha=0.3)
 
 plt.tight_layout()
 
-plt.show()
+save_chart("volume_ratio.png")
 
 
 # ==============================================================================================
@@ -4336,7 +4359,7 @@ plt.ylabel("%")
 plt.legend()
 plt.grid(alpha=0.3)
 plt.tight_layout()
-plt.show()
+save_chart("atr.png")
 
 # ==============================================================================================
 # 35. CHART 10 - FEAR & GREED
@@ -4352,7 +4375,7 @@ if fng_df is not None and not fng_df.empty:
     plt.legend()
     plt.grid(alpha=0.3)
     plt.tight_layout()
-    plt.show()
+    save_chart("fearandgreedindex.png")
 # ==============================================================================================
 # 36. CHART 11 - USD/KRW
 # ==============================================================================================
@@ -4363,7 +4386,7 @@ plt.title("USD/KRW")
 plt.legend()
 plt.grid(alpha=0.3)
 plt.tight_layout()
-plt.show()
+save_chart("usdkrw.png")
 
 # ==============================================================================================
 # 37. CHART 12 - DXY
@@ -4375,7 +4398,7 @@ plt.title("Dollar Index")
 plt.legend()
 plt.grid(alpha=0.3)
 plt.tight_layout()
-plt.show()
+save_chart("dxy.png")
 
 # ==============================================================================================
 # 38. FINAL SUMMARY
@@ -4504,6 +4527,17 @@ print(
     " -> Bottoming"
     " -> Risk 순서로 판단."
 )
+
+# ==============================================================================================
+# 39. GITHUB ACTIONS METADATA
+# ==============================================================================================
+with open("analysis_metadata.env", "w", encoding="utf-8") as f:
+    f.write(f'ANALYSIS_DATE="{TODAY}"\n')
+    f.write(f'TICKER="{ticker_symbol}"\n')
+    f.write(f'FINAL_SIGNAL="{final_decision["signal"]}"\n')
+
+print()
+print("GitHub metadata saved: analysis_metadata.env")
 
 # ==============================================================================================
 # END
