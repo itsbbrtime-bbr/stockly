@@ -39,7 +39,7 @@ jobs:
 
       - name: Run quantitative analysis
         env:
-          TICKER: SOXX
+          TICKER: SMH
           BENCHMARK: VOO
           SAVE_CHARTS: "true"
         run: |
