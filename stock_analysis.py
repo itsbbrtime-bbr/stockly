@@ -54,10 +54,11 @@ NY_TZ = ZoneInfo("America/New_York")
 TODAY = date.today()
 
 # 분석할 종목
+ticker_symbol = os.getenv("TICKER", "SOXX")
 # ticker_symbol = "QQQ" 
 # ticker_symbol = "QLD"
 # ticker_symbol = "TQQQ"  
-ticker_symbol = "SMH"
+# ticker_symbol = "SMH"
 # ticker_symbol = "SOXX"
 # ticker_symbol = "SOXQ"
 # ticker_symbol = "DRAM"
@@ -75,10 +76,12 @@ ticker_symbol = "SMH"
 # ticker_symbol = "PWR"
 
 # 시장 벤치마크
-MARKET_BENCHMARK = "VOO"
+# MARKET_BENCHMARK = "VOO"
+MARKET_BENCHMARK = os.getenv("BENCHMARK", "VOO")
 
 # 상대강도 비교용
-RS_BENCHMARK = "VOO"
+# RS_BENCHMARK = "VOO"
+RS_BENCHMARK = MARKET_BENCHMARK
 
 # 기술적 분석 기간
 # MA200을 안정적으로 계산하고 장기 추세/성과를 보기 위해 3년 사용
